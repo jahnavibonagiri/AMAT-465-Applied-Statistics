@@ -1,0 +1,284 @@
+---
+title: 'Applied Statistics Final Presentation: Insurance Rates'
+author: "Nidhi Vadnere and Jahnavi Bonagiri"
+date: "2022-12-02"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+## Section 0: Loading the Dataset
+The library functions we need for the insurance data set and load data set
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(car)
+library(MASS)
+library(lmtest)
+insurance <- read.csv('insurance.csv')
+names(insurance)<-c('age','sex','bmi','children','smoker','region','charges')
+insurance<-na.omit(insurance)
+str(insurance)
+
+```
+
+
+## Section 1: Introduction and Purpose 
+	
+Health care is one of the most costliest expenses when living in the U.S. costing families hundreds of dollars per month. According to the U.S Bureau of Labor, medical insurance is one the highest spending costs for many middle and low income families. As many families need to budget their daily expenses in an efficient manner, it is important to recognize the factors that may influence a family’s rising costs so they can better manage their resources. Economic stress on medical costs can affect long-term monetary dreams of families. The solution to conquer this crisis is to help assist these families in predicting and assisting them with the rising costs. Health insurance is a product that covers fees associated with medicine, surgical procedures or hospital visits of an insured which could be an individual, family, or a collection of people. When people first hear of medical insurance costs, factors such as health history, age, gender, and children first come to mind. 
+
+The purpose of this project is to gain a deeper understanding of what factors play the most important role in identifying which families have the higher insurance expenses. By understanding the key factors that affect medical costs, we can predict in advance about the health insurance expenses, which could prove to be very beneficial for insurers and patients to manage their assets appropriately. 
+
+Initial assumptions we had going into the analysis was that smoker and bmi would have the highest effect on insurance costs due to medical conditions and medicines they may need. 
+
+
+## Section 2: Data Source
+The dataset we acquired for the project was provided by a verified data scientist on Kaggle on medical costs. The main data we will be using is the charges as the response variable and bmi, age, children, smoker history and region as the explanatory variables. There was prior work done using different models such as Lasso and Random regression, so we will use this opportunity to perform a thorough analysis to conclude a solid result to see if insurance costs are correlated with bmi, age, children, region and medical history using a Linear regression and various other transformations.
+
+We will be using all of these variables to perform regression analysis of various models:
+
+Numerical Variables:
+
+age: age of primary beneficiary
+
+bmi: Body mass index, providing an understanding of body, weights that are relatively high or low relative to height,
+objective index of body weight (kg / m ^ 2) using the ratio of height to weight, ideally 18.5 to 24.9
+
+charges: Individual medical costs billed by health insurance
+
+Categorical Variables:
+
+sex: insurance contractor gender, female, male
+1=Male
+0=Female
+
+smoker: Smoker or non-smoker
+1= yes
+0= no
+
+region: the beneficiary's residential area in the US, northeast, southeast, southwest, northwest.
+southwest=1
+southeast=2
+northwest=3
+northeast=4
+ 
+children: Number of children covered by health insurance / Number of dependents
+
+## Catagorical Variable Tables
+```{r}
+table(insurance$children)
+table(insurance$sex)
+table(insurance$smoker)
+table(insurance$region)
+```
+
+## Pairs on Numerical Variables
+
+```{r,warning=FALSE}
+source("pairs.r")  
+pairs(insurance[c(7, 1,3)],panel=panel.smooth,diag.panel=panel.hist,lower.panel=panel.cor) 
+```
+After running pairs.r, we saw that was an interaction present between charges vs bmi. There was also an interaction between age vs bmi. 
+We also that the effect of age with charges is additive, producing 3 regression lines that are parallel, with only the intercept changing according to the model. We will need to perform more analysis of the regression lines to see if the correlation is stronger with or without the interaction effects. 
+
+## Storing the Categorical Variables
+Stored all the categorical variables using as.factor so the code looks cleaner when using various models.
+```{R}
+insurance$children<-as.factor(insurance$children)
+insurance$sex<-as.factor(insurance$sex)
+insurance$smoker<-as.factor(insurance$smoker)
+insurance$region<-as.factor(insurance$region)
+```
+
+## Box Plot on Catagorical Variables
+```{R}
+par(mfrow=c(2,2))
+boxplot(charges~sex,data=insurance)
+boxplot(charges~region,data=insurance)
+boxplot(charges~children,data=insurance)
+boxplot(charges~smoker,data=insurance)
+
+```
+
+We produced box plots for all the categorical variables to compare the mean and see the differences between all the variables.Based on the results, we noticed that there were a few outliers present for the children, sex and region variables. It was interesting to see how non smoker had a lower median insurance charge rate compared to the smoker median insurance charge rate. We will use this information later when looking for interactions
+
+## Histogram Representation of the Numerical Variables
+```{r}
+hist(insurance$bmi)
+hist(insurance$age)
+```
+Based on the histogram for the numerical variables, we noticed that the age histogram all had high frequency values for every age. Whereas, the bmi histogram had more of a bell-shaped plot. The values were centered around the ranges of 30-40. As mentioned previously, the normal bmi values range from 18-24, so it made sense that the people with the higher bmi tend to have higher insurance costs.
+
+## Interactions:
+Based on pairs.r and the box plot, we plotted the interactions plots below. As we see in the interaction including smoker with Charges vs Age, there appeared to be a clump of blue dots mixed with pink triangles Additionally, there are two pink lines, which also shows us that we might potentially need another variable to explain this interaction.
+
+```{R}
+#Interaction with Smoker for Charges vs Age and Charges vs BMI
+library(car)
+scatterplot(charges ~ age | smoker, data=insurance)
+
+scatterplot(charges ~ bmi | smoker, data=insurance)
+
+```
+
+
+## Cross Validation
+Train and Test
+To perform cross validation we used a 80:20 ratio to split our data into a training and testing data set.
+```{R}
+names(insurance)
+n<- length(insurance$charges)
+cvindex<- sample(1:n,.8*n,replace=FALSE)
+train<-insurance[cvindex,]
+test<-insurance[-cvindex,]
+
+View(test)
+View(train)
+```
+
+
+## Running transformations to find the best full model:
+We ran different models with the suspected interactions that would give us the best results. Upon running these models, modE, which had an interaction with smoker and poly of 3, gave us the highest R^2 and adjR^2 out of all the models.
+Multiple R-squared:  0.8496,	Adjusted R-squared:  0.8451 
+```{r}
+#Full Model with interactions using BMI
+modA<-lm(charges~bmi*sex+bmi*children+bmi*smoker+bmi*region+bmi*age,data=train)
+#Full Model with interactions using Age
+modB<-lm(charges~age*sex+age*children+age*smoker+age*region+age*bmi,data=train)
+#Full Model with interactions using BMI with Poly
+modC<-lm(charges~bmi*sex+bmi*children+bmi*smoker+bmi*region+bmi*poly(age,3),data=train)
+#Full Model with interactions using Age with Poly 
+modD<-lm(charges~age*sex+age*children+age*smoker+age*region+age*poly(bmi,3),data=train)
+#Full Model with interactions using Smoker with Poly on bmi and age
+modE<-lm(charges~smoker*sex+smoker*poly(bmi,3)+smoker*children+smoker*region+smoker*poly(age,3),data=train) 
+
+summary(modA)
+summary(modB)
+summary(modC)
+summary(modD)
+summary(modE)
+
+```
+
+## Box-cox:
+
+We used the method of Box-Cox to see if our data set requires transformations to get the best regression. The Box-Cox transformation suggests that using lambda = .2 or transforming Y by Y^.2. We will be using this lambda value in our later models to see if there is a significant difference between the models. We ended up getting a Multiple R-squared:  0.8295 and Adjusted R-squared:  0.8244, which was lower than modE.
+
+```{r}
+
+boxcox(charges~.,data=train)
+modJ<- lm(charges^0.2~smoker*sex+smoker*poly(bmi,3)+smoker*children+smoker*region+smoker*poly(age,3),data=train) 
+summary(modJ)
+```
+
+## Creating the Full Model and Finding FullMSE
+```{r}
+full.mod<-lm( charges~smoker*sex+smoker*poly(bmi,3)+smoker*children+smoker*region+smoker*poly(age,3),data=train)
+fullMSE<-summary(full.mod)$sig^2      
+```
+
+Using our training data, we created a full model that contains all the interactions from modE. We will use this model and preform backwards, forwards, and both-direction selection methods
+
+## Backward
+```{r}
+backstep <- step(full.mod, direction="backward")
+```
+
+
+## Forward
+```{r}
+forwardstep <- step(full.mod, direction="forward")
+```
+
+## Both Directions
+```{r}
+bothstep <- step(full.mod, direction="both")
+```
+
+## Model Comparisons
+```{r,warning=FALSE}
+
+##Function to Calculate PMSE
+PMSE<-function(model,testdata){
+  fitted <- predict(model,newdata=testdata)
+  ytest<- testdata[,7]
+  PMSEret<-sum((ytest-fitted)^2)/268
+  return(PMSEret)
+}
+
+source('C:/Users/Jahnavi Bonagiri/Downloads/modelselfunctionss.R')                      
+rbind(
+  full.model = c(Criteria(full.mod,fullMSE,label=T),
+         PMSE(full.mod,test)),
+  
+  backstep.model = c(Criteria(backstep,fullMSE,label=T),
+         PMSE(backstep,test)),
+  
+  forwardstep.model = c(Criteria(forwardstep,fullMSE,label=T),
+         PMSE(forwardstep,test)),
+  
+  bothstep.model = c(Criteria(bothstep,fullMSE,label=T),
+         PMSE(bothstep,test))
+  )
+
+```
+We noticed that our full model and forward model were similar. Our backward selection and both direction selection are similar as well. So we will compare the full model and the reduced model to find the best results. 
+ 
+Our backstep/both step model has the lowest PMSE. To further test our two models, we will preform a two-way anova test to decide on our final model.
+
+## Comparing Best Two Models
+```{r}
+summary(full.mod)
+summary(backstep)
+anova(backstep,full.mod)
+```
+After preforming the anova test, we decided to choose the backstep model over our full model that had a lower PMSE. 
+
+## Final Model Summary
+```{r}
+summary(backstep)
+```
+We now have a  model where most terms are significant and our adjusted R-squared value is fairly high.
+
+## Plot Chosen Model
+We plotted backstep to see the variance and residuals. The residuals were more scattered but there was a cloud present in the bottom left corner. This indicates that there is a problem with our residual plot. Moreover, the normality plot also shows us that the data is not normal. This made us realize that there might be an underlying issue with the data set that will need to be explored more.
+```{r}
+plot(backstep)
+```
+
+
+## Shapiro and Bp Test
+```{r}
+shapiro.test(backstep$residuals)
+bptest(backstep)
+```
+The Shapiro-Wilks test gives us a p-value of about 0, indicating the data is not normal, which aligns with our findings from the normality plot.
+
+We performed the bptest to see how backstep was doing with the variance of the residuals. After performing the Bruesch Pagan test, we got a p value greater than 0.05, which tells us that the variance of the residuals is fairly constant.
+
+## Conclusion
+
+Upon performing several tests and running various models, we conclude that the backstep model generated by the back selection was the best model. It was also the simpler model favored in the anova test. Based on the AIC and PRESS value as well, it had the lowest score. Moreover, based on the summary results we generated, it had a high adjusted R^2 value and had many terms that were significant based on their p-values.
+
+During the regression analysis of the project, we faced many challenges using this data set due to lack of numerical variables. We only had 7 variables, half of them being categorical which limited us to make better predictive models. It was also difficult to find a model that had scattered residuals and good normality plots, which we concluded came from underlying problems in the data set. 
+
+We tried to solve this issue by using the categorical variables as the interaction terms and found that smoker produced the best results and was the most interesting interaction. From there, we performed various transformations, used forward and backward selection, and also cross validation to make sure that we found the best predictive model. After trying to find interactions between the variables, we found an interesting interaction between the variables smoker, age and charges. The interaction plot showed us that we might potentially need another variable to explain the interaction.
+
+From this project, we realized that it is very important to thoroughly analyze the data and perform various methods to get the best regression model. In doing so, it can help families better manage their finances and potentially help maintain or lower insurance costs. Overall, we gained a deeper understanding of how regression analysis can be applied to scenarios such as this. We hope to improve upon our analysis and investigate outside variables that might be affecting our model.
+
+
+## Literature Review:
+
+There were many international papers that analyzed the medical costs using these data sets. In the paper Regression Analysis and Prediction Of Medical Insurance cost by Ayushi Bharti and Lokesh Malik they used 7 attributes and performed regression techniques that are Ridge Regression, Lasso Regression, Random forest, and Elastic Net. They were able to conclude that the best model was using the Random forest. In another paper called Predict Health Insurance Cost by using Machine Learning and DNN Regression Models by Mohamed hanafy and Omar M. A. Mahmoud, were able to get significant results as well. The findings they had showed that Stochastic Gradient Boosting offers the best efficiency, with an RMSE value of 0.380189,  an  MAE  value of  0.17448,  and an  accuracy of 85.82. They concluded that Stochastic gradient boosting can be used in the estimation of insurance costs with better performance than other regression models. 
+	
+## Works Cited:
+https://www.kaggle.com/datasets/mirichoi0218/insurance?select=insurance.csv
+https://www.researchgate.net/publication/348559741_Predict_Health_Insurance_Cost_by_using_Machine_Learning_and_DNN_Regression_Models
+https://ijcrt.org/papers/IJCRT2203462.pdf
+https://healthpayerintelligence.com/news/health-insurance-costs-placing-stress-on-majority-of-americans#:~:text=Seventy%2Dtwo%20percent%20of%20millennials,due%20their%20health%20insurance%20costs.
+https://www.bls.gov/news.release/cesan.nr0.htm

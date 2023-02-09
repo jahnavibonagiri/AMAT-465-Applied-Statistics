@@ -1,0 +1,5 @@
+data1<-View(cuckoo)
+boxplot(cuckoo$Length~as.factor(cuckoo$Species))
+data1<-(boxplot(cuckoo$Length~as.factor(cuckoo$Species)))
+data1<-lm(cuckoo$Length~as.factor(cuckoo$Species))
+anova(data1)
